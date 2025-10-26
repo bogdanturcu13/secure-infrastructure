@@ -1,0 +1,79 @@
+---
+- name: 03 - Desplegar Agentes Wazuh en nodos web y db
+  hosts: web, db
+  become: true
+
+  vars:
+    wazuh_manager_ip: "192.168.56.102"
+    wazuh_agent_version: "4.13.1-1"
+    wazuh_gpg_keyring: /etc/apt/keyrings/wazuh.gpg
+
+  tasks:
+    # TAREA 1: Crear directorio para keyrings
+    - name: 1. Crear directorio para keyrings si no existe
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    # TAREA 2: Añadir clave GPG del repositorio Wazuh
+    - name: 2. Añadir clave GPG del repositorio Wazuh al keyring específico
+      ansible.builtin.apt_key:
+        url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+        keyring: "{{ wazuh_gpg_keyring }}"
+        state: present
+
+    # TAREA 3: Añadir repositorio APT de Wazuh
+    - name: 3. Añadir repositorio APT de Wazuh (especificando signed-by)
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by={{ wazuh_gpg_keyring }}] https://packages.wazuh.com/4.x/apt/ stable main"
+        state: present
+        filename: wazuh
+        update_cache: yes
+
+    # TAREA 4: Instalar el paquete wazuh-agent
+    - name: 4. Instalar el paquete wazuh-agent
+      ansible.builtin.apt:
+        name: "wazuh-agent={{ wazuh_agent_version }}"
+        state: present
+
+    # TAREA 5: Instalar dependencia python3-lxml
+    - name: 5. Instalar dependencia 'python3-lxml' para el módulo XML
+      ansible.builtin.apt:
+        name: python3-lxml
+        state: present
+
+    # TAREA 6: Configurar ossec.conf con plantilla
+    - name: 6. Configurar ossec.conf con template
+      ansible.builtin.template:
+        src: ossec.conf.j2
+        dest: /var/ossec/etc/ossec.conf
+        owner: root
+        group: wazuh
+        mode: '0640'
+      notify: Reiniciar wazuh-agent
+
+    # TAREA 7: Corregir formato del archivo ossec.conf
+    - name: 7.1. Corregir finales de línea en ossec.conf
+      ansible.builtin.command:
+        cmd: dos2unix /var/ossec/etc/ossec.conf
+      changed_when: false
+
+    - name: 7.2. Eliminar BOM de ossec.conf
+      ansible.builtin.shell:
+        cmd: "sed -i '1s/^\xEF\xBB\xBF//' /var/ossec/etc/ossec.conf"
+      changed_when: false
+
+    # TAREA 8: Habilitar e iniciar el servicio Wazuh Agent
+    - name: 8. Habilitar e iniciar el servicio wazuh-agent
+      ansible.builtin.systemd:
+        name: wazuh-agent
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: Reiniciar wazuh-agent
+      ansible.builtin.systemd:
+        name: wazuh-agent
+        state: restarted
+
