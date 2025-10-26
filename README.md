@@ -44,9 +44,7 @@ El laboratorio consta de las siguientes máquinas virtuales (VMs), configuradas 
         ansible-playbook playbooks/grafana_install.yml
 
         # Instalar agentes Zabbix y Wazuh en nodos monitorizados
-        # (Se asume que los agentes se instalaron manualmente o mediante otro playbook no incluido aquí,
-        # ya que nginx_mysql_install.yml no se utilizó)
-        # Si necesitas un playbook solo para agentes, debería crearse.
+        
         ```
 
 ## ⚙️ Configuración Post-Instalación
