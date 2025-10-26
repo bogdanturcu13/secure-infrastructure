@@ -1,0 +1,157 @@
+---
+- name: 04 - Desplegar Zabbix Server (PostgreSQL) en monitor-server
+  hosts: monitor
+  become: true
+
+  vars:
+    zabbix_db_password: "zabixPassAccess_" # Cambiarla para más seguridad
+    zabbix_server_version: "6.0"
+
+  # ######################################################################
+  # INICIO DEL BLOQUE DE TAREAS
+  # ######################################################################
+  tasks:
+    - name: 1.1 Descargar paquete .deb del repositorio Zabbix (versión 'latest' para 24.04)
+      ansible.builtin.apt:
+        deb: "https://repo.zabbix.com/zabbix/{{ zabbix_server_version }}/ubuntu/pool/main/z/zabbix-release/zabbix-release_latest_{{ zabbix_server_version }}+ubuntu{{ ansible_distribution_version }}_all.deb"
+        state: present
+      register: repo_download
+      until: repo_download is succeeded
+      retries: 3
+      delay: 5
+
+    - name: 1.2 Actualizar caché de APT después de añadir el repo Zabbix
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: 2.1 Instalar servidor y cliente PostgreSQL
+      ansible.builtin.apt:
+        name:
+          - postgresql
+          - postgresql-contrib
+        state: present
+
+    - name: 2.1.1 Instalar dependencia 'python3-psycopg2' para módulos PostgreSQL
+      ansible.builtin.apt:
+        name: python3-psycopg2
+        state: present
+        update_cache: yes
+
+    - name: 2.2 Asegurar que PostgreSQL esté iniciado y habilitado
+      ansible.builtin.systemd:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: 2.3 Crear usuario 'zabbix' en PostgreSQL
+      become_user: postgres
+      community.postgresql.postgresql_user:
+        name: zabbix
+        password: "{{ zabbix_db_password }}"
+        state: present
+      check_mode: false
+
+    - name: 2.4 Crear base de datos 'zabbix' propiedad del usuario 'zabbix'
+      become_user: postgres
+      community.postgresql.postgresql_db:
+        name: zabbix
+        owner: zabbix
+        encoding: UTF-8
+        lc_collate: C.UTF-8
+        lc_ctype: C.UTF-8
+        template: template0
+        state: present
+      check_mode: false
+
+    - name: 3.1 Instalar Zabbix Server (con soporte PostgreSQL), Frontend y Agente
+      ansible.builtin.apt:
+        name:
+          - zabbix-server-pgsql
+          - zabbix-frontend-php
+          - zabbix-apache-conf
+          - zabbix-sql-scripts
+          - zabbix-agent
+        state: present
+
+    # --- TAREA QUE AÑADE LA DEPENDENCIA PHP Y NOTIFICA AL HANDLER ---
+    - name: 3.2 Instalar extensión PHP para PostgreSQL (php-pgsql)
+      ansible.builtin.apt:
+        name: php-pgsql
+        state: present
+      notify: Reiniciar apache2 # Notifica al handler definido ABAJO
+
+    - name: 4.1 Descomprimir script SQL del schema inicial (si no existe)
+      ansible.builtin.shell:
+        cmd: test -f /tmp/zabbix_server.sql || zcat /usr/share/zabbix-sql-scripts/postgresql/server.sql.gz > /tmp/zabbix_server.sql
+        creates: /tmp/zabbix_server.sql
+      changed_when: false
+
+    - name: 4.2 Comprobar si el schema ya ha sido importado (existe tabla 'users')
+      become_user: postgres
+      ansible.builtin.command:
+        cmd: psql -d zabbix -qtA -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users');"
+      register: zabbix_schema_exists
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: 4.3 Importar schema inicial a la base de datos 'zabbix' (si no existe)
+      become_user: postgres
+      community.postgresql.postgresql_script:
+        login_db: zabbix
+        path: /tmp/zabbix_server.sql
+      when: zabbix_schema_exists.stdout == 'f'
+      check_mode: false
+      register: schema_import_result
+
+    - name: 4.4 Otorgar permisos al usuario 'zabbix' sobre el schema
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_db: zabbix
+        query: |
+          GRANT ALL PRIVILEGES ON SCHEMA public TO zabbix;
+          GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO zabbix;
+          GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO zabbix;
+      changed_when: false
+      check_mode: false
+
+    - name: 5.1 Establecer la contraseña de la BD en zabbix_server.conf
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_server.conf
+        regexp: '^#?\s*DBPassword='
+        line: 'DBPassword={{ zabbix_db_password }}'
+        state: present
+      notify: Reiniciar zabbix-server
+
+    - name: 6.1 Asegurar que Apache (apache2) esté iniciado y habilitado
+      ansible.builtin.systemd:
+        name: apache2
+        state: started
+        enabled: yes
+
+    - name: 7.1 Asegurar que Zabbix Server esté iniciado y habilitado
+      ansible.builtin.systemd:
+        name: zabbix-server
+        state: started
+        enabled: yes
+
+    - name: 7.2 Asegurar que Zabbix Agent esté iniciado y habilitado
+      ansible.builtin.systemd:
+        name: zabbix-agent
+        state: started
+        enabled: yes
+
+  # ######################################################################
+  # INICIO DEL BLOQUE DE HANDLERS
+  # ######################################################################
+  handlers:
+    - name: Reiniciar zabbix-server
+      ansible.builtin.systemd:
+        name: zabbix-server
+        state: restarted
+
+    # --- HANDLER PARA REINICIAR APACHE ---
+    - name: Reiniciar apache2
+      ansible.builtin.systemd:
+        name: apache2
+        state: restarted
