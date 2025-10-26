@@ -1,0 +1,77 @@
+---
+- name: 02 - Desplegar el stack de Wazuh (All-in-One)
+  hosts: monitor
+  become: true
+
+  vars:
+    local_script_path: "<Introducir path al wazuh-install.sh actual>"
+    remote_script_path: "<Introducir path al wazuh-install.sh anterior>"
+
+  tasks:
+    - name: 1. Limpiar cualquier fichero de descarga fallido anterior
+      ansible.builtin.file:
+        path: "{{ remote_script_path }}"
+        state: absent
+
+    - name: 2. Instalar la utilidad 'dos2unix'
+      ansible.builtin.apt:
+        name: dos2unix
+        state: present
+        update_cache: yes  # Actualiza la caché si es necesario
+
+    - name: 3. Copiar el script de instalación desde el controlador al servidor
+      ansible.builtin.copy:
+        src: "{{ local_script_path }}"
+        dest: "{{ remote_script_path }}"
+        mode: '0755'  # Lo copia y le da permisos de ejecución
+
+    - name: 4. Convertir finales de línea de Windows (CRLF) a Unix (LF)
+      ansible.builtin.command:
+        cmd: "dos2unix {{ remote_script_path }}"
+      register: dos2unix_output
+      changed_when: "'converting file' in dos2unix_output.stdout"
+
+    - name: 5. Ejecutar el script de instalación de Wazuh (modo All-in-One)
+      ansible.builtin.command:
+        cmd: "bash {{ remote_script_path }} -a"
+        creates: "/usr/share/wazuh-indexer"  # Idempotencia
+      register: wazuh_install_output
+      changed_when: wazuh_install_output.rc == 0
+
+    - name: 6. Leer el fichero de contraseñas generado
+      # Esta tarea lee el contenido del fichero de contraseñas
+      # y lo guarda en la variable 'password_file_content'.
+      ansible.builtin.command:
+        cmd: "cat /home/ansible/wazuh-install-files/wazuh-passwords.txt"
+      register: password_file_content
+      # Indicamos a Ansible que esta tarea nunca "cambia" el sistema.
+      changed_when: false
+      # Esta tarea debe ejecutarse siempre, incluso si la Tarea 5 se salta.
+      check_mode: false
+
+    - name: DEBUG - Mostrar contenido crudo del fichero de contraseñas
+      ansible.builtin.debug:
+        var: password_file_content.stdout_lines
+
+    - name: 7. Extraer la línea de usuario y contraseña del admin con grep
+      ansible.builtin.shell:
+        # Use grep -A 1 to find the line with 'admin' username and the next line (password)
+        cmd: "grep -A 1 \"^ *indexer_username: 'admin'\" /home/ansible/wazuh-install-files/wazuh-passwords.txt"
+      register: grep_admin_block
+      changed_when: false
+      check_mode: false
+
+    - name: 8. Mostrar la contraseña de administrador (extraída con split)
+      ansible.builtin.debug:
+        msg: |
+          ***************************************************************
+          *** ¡INSTALACIÓN DE WAZUH COMPLETADA! ***
+
+          Se ha extraído la contraseña del fichero wazuh-passwords.txt:
+
+          Usuario de Admin: admin
+          Contraseña de Admin:
+          {{ grep_admin_block.stdout_lines[1].split("'")[1] }}
+
+          Puede acceder al dashboard en: https://192.168.56.102
+          ***************************************************************
