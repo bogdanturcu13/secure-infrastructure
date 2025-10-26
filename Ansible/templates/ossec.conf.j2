@@ -1,0 +1,82 @@
+<ossec_config>
+  <client>
+    <server>
+      <address>{{ wazuh_manager_ip }}</address>
+      <port>1514</port>
+      <protocol>tcp</protocol>
+    </server>
+
+    <config-profile>ubuntu, ubuntu20, ubuntu20.04</config-profile>
+    <notify_time>10</notify_time>
+    <time-reconnect>60</time-reconnect>
+    <auto_restart>yes</auto_restart>
+    <crypto_method>aes</crypto_method>
+  </client>
+
+  <syscheck>
+    <disabled>no</disabled>
+    <frequency>43200</frequency>
+    <alert_new_files>yes</alert_new_files>
+    <scan_on_start>yes</scan_on_start>
+    <directories check_all="yes" realtime="yes" report_changes="yes">/etc,/usr/bin,/usr/sbin,/bin,/sbin,/boot</directories>
+    <ignore>/etc/mtab</ignore>
+    <ignore>/etc/hosts.deny</ignore>
+    <ignore>/etc/mail/statistics</ignore>
+    <ignore>/etc/random-seed</ignore>
+    <ignore>/etc/adjtime</ignore>
+    <ignore>/etc/mnttab</ignore>
+    <nodiff>/etc/ssl/private</nodiff>
+    <skip_nfs>yes</skip_nfs>
+  </syscheck>
+
+  <rootcheck>
+    <disabled>no</disabled>
+    <check_files>yes</check_files>
+    <check_trojans>yes</check_trojans>
+    <check_dev>yes</check_dev>
+    <check_sys>yes</check_sys>
+    <check_pids>yes</check_pids>
+    <check_ports>yes</check_ports>
+    <check_if>yes</check_if>
+    <frequency>43200</frequency>
+    <rootkit_files>/var/ossec/etc/shared/rootkit_files.txt</rootkit_files>
+    <rootkit_trojans>/var/ossec/etc/shared/rootkit_trojans.txt</rootkit_trojans>
+    <skip_nfs>yes</skip_nfs>
+  </rootcheck>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/messages</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/secure</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/syslog</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/auth.log</location>
+  </localfile>
+
+  <localfile>
+    <log_format>command</log_format>
+    <command>df -P</command>
+    <frequency>360</frequency>
+  </localfile>
+
+  <localfile>
+    <log_format>full_command</log_format>
+    <command>netstat -tulpn | sed -r 's/\s+/ /g'</command>
+    <frequency>360</frequency>
+  </localfile>
+
+  <active-response>
+    <disabled>yes</disabled>
+  </active-response>
+</ossec_config>
