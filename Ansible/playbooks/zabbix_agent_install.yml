@@ -1,0 +1,72 @@
+---
+- name: 05 - Desplegar Agentes Zabbix en nodos web y db
+  hosts: web, db # Solo se ejecuta en web-server y db-server
+  become: true # Necesitamos privilegios de root
+
+  vars:
+    zabbix_server_ip: "192.168.56.102" # IP de tu monitor-server
+    zabbix_agent_version: "6.0"
+
+  tasks:
+    # --- 1. Añadir Repositorio Zabbix (igual que en el servidor) ---
+    - name: 1.1 Descargar paquete .deb del repositorio Zabbix (versión 'latest' para 24.04)
+      ansible.builtin.apt:
+        # Usamos la misma URL que funcionó para el servidor
+        deb: "https://repo.zabbix.com/zabbix/{{ zabbix_agent_version }}/ubuntu/pool/main/z/zabbix-release/zabbix-release_latest_{{ zabbix_agent_version }}+ubuntu{{ ansible_distribution_version }}_all.deb"
+        state: present
+      register: repo_download
+      until: repo_download is succeeded
+      retries: 3
+      delay: 5
+
+    - name: 1.2 Actualizar caché de APT después de añadir el repo Zabbix
+      ansible.builtin.apt:
+        update_cache: yes
+
+    # --- 2. Instalar Agente Zabbix ---
+    - name: 2.1 Instalar el paquete zabbix-agent
+      ansible.builtin.apt:
+        name: zabbix-agent
+        state: present
+
+    # --- 3. Configurar el Agente ---
+    - name: 3.1 Configurar la IP del servidor Zabbix en zabbix_agentd.conf
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agentd.conf
+        regexp: '^Server=127.0.0.1' # Busca la línea por defecto
+        line: 'Server={{ zabbix_server_ip }}' # La reemplaza con la IP del monitor-server
+        state: present
+      notify: Reiniciar zabbix-agent
+
+    - name: 3.2 Configurar el 'ServerActive' (para comprobaciones activas)
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agentd.conf
+        regexp: '^ServerActive=127.0.0.1' # Busca la línea por defecto
+        line: 'ServerActive={{ zabbix_server_ip }}'
+        state: present
+      notify: Reiniciar zabbix-agent
+
+    - name: 3.3 Configurar el 'Hostname' del agente
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agentd.conf
+        regexp: '^Hostname=Zabbix server' # Busca la línea por defecto
+        # Usamos la variable 'inventory_hostname' de Ansible
+        # que será 'web-server' o 'db-server'
+        line: 'Hostname={{ inventory_hostname }}'
+        state: present
+      notify: Reiniciar zabbix-agent
+
+    # --- 4. Iniciar Servicio ---
+    - name: 4.1 Asegurar que Zabbix Agent esté iniciado y habilitado
+      ansible.builtin.systemd:
+        name: zabbix-agent
+        enabled: yes
+        state: started
+
+  # --- Handlers ---
+  handlers:
+    - name: Reiniciar zabbix-agent
+      ansible.builtin.systemd:
+        name: zabbix-agent
+        state: restarted
+
