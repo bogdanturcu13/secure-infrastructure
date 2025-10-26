@@ -1,0 +1,37 @@
+---
+- name: 01 - Aplicar configuración base a todos los servidores
+  hosts: all_managed
+  become: true  # Ejecutar tareas como root (sudo)
+
+  tasks:
+    # TAREA 1: Actualizar el sistema
+    - name: Actualizar la caché de APT y todos los paquetes del sistema
+      ansible.builtin.apt:
+        update_cache: yes
+        upgrade: dist
+        cache_valid_time: 3600  # No actualizar la caché si es menor a 1 hora
+
+    # TAREA 2: Instalar paquetes comunes
+    - name: Instalar paquetes de utilidad comunes
+      ansible.builtin.apt:
+        name:
+          - vim
+          - htop
+          - git
+          - tree
+        state: present
+
+    # TAREA 3: Configurar el banner de bienvenida
+    - name: Configurar banner de bienvenida de seguridad (MOTD)
+      ansible.builtin.lineinfile:
+        path: /etc/motd
+        line: |
+          ###############################################################
+          #                                                             #
+          #      ACCESO NO AUTORIZADO ESTRICTAMENTE PROHIBIDO           #
+          #                                                             #
+          #   Todas las conexiones son monitorizadas y registradas.     #
+          #                                                             #
+          ###############################################################
+        create: yes
+        mode: '0644'
