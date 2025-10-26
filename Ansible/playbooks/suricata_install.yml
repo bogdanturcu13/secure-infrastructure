@@ -1,0 +1,75 @@
+---
+- name: 06 - Desplegar Suricata (NIDS) en monitor-server
+  hosts: monitor  # Solo se ejecuta en el servidor monitor
+  become: true
+
+  vars:
+    # Esta es la interfaz de tu red interna (Host-Only)
+    suricata_interface: "enp0s3"
+    # Esta es la red que Suricata debe vigilar
+    suricata_home_net: "192.168.56.0/24"
+
+  tasks:
+    # --- 1. Añadir Repositorio PPA de Suricata ---
+    - name: 1.1 Instalar dependencias para añadir repositorios
+      ansible.builtin.apt:
+        name: software-properties-common
+        state: present
+
+    - name: 1.2 Añadir repositorio PPA oficial de Suricata
+      ansible.builtin.apt_repository:
+        repo: ppa:oisf/suricata-stable
+        state: present
+        update_cache: yes
+      register: ppa_added
+      until: ppa_added is succeeded  # Reintentar si falla
+      retries: 3
+      delay: 5
+
+    # --- 2. Instalar Suricata y Herramientas ---
+    - name: 2.1 Instalar Suricata y suricata-update
+      ansible.builtin.apt:
+        name:
+          - suricata
+        state: present
+
+    # --- 3. Configurar Suricata ---
+    - name: 3.1 Configurar la red local (HOME_NET) en suricata.yaml
+      ansible.builtin.lineinfile:
+        path: /etc/suricata/suricata.yaml
+        regexp: '^(\s*HOME_NET:)\s*\[.*\]'
+        line: '\1 "[{{ suricata_home_net }}]"'  # Define la red interna
+        backrefs: yes  # Asegura que reemplaza la línea correcta
+      notify: Reiniciar suricata
+
+    - name: 3.2 Configurar la interfaz de escucha (enp0s3)
+      ansible.builtin.lineinfile:
+        path: /etc/suricata/suricata.yaml
+        regexp: '^(\s*interface:)\s*eth0'  # Busca la línea por defecto (eth0)
+        line: '\1 {{ suricata_interface }}'  # La reemplaza con enp0s3
+        backrefs: yes
+      notify: Reiniciar suricata
+
+    # --- 4. Actualizar Reglas ---
+    - name: 4.1 Ejecutar suricata-update para descargar reglas
+      # Esto descargará el conjunto de reglas 'Emerging Threats' por defecto
+      ansible.builtin.command:
+        cmd: "suricata-update"
+        creates: /var/lib/suricata/rules/suricata.rules  # Idempotencia
+      register: suricata_update_result
+      changed_when: "'Rules downloaded' in suricata_update_result.stdout"
+      notify: Reiniciar suricata
+
+    # --- 5. Iniciar Servicio ---
+    - name: 5.1 Asegurar que Suricata esté iniciado y habilitado
+      ansible.builtin.systemd:
+        name: suricata
+        enabled: yes
+        state: started
+
+  # --- Handlers ---
+  handlers:
+    - name: Reiniciar suricata
+      ansible.builtin.systemd:
+        name: suricata
+        state: restarted
