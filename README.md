@@ -38,13 +38,14 @@ El laboratorio consta de las siguientes máquinas virtuales (VMs), configuradas 
     * Ejecuta los playbooks en el orden adecuado desde `ansible-automation`:
         ```bash
         # Instalar componentes principales en monitor-server
-        ansible-playbook playbooks/zabbix_install.yml
-        ansible-playbook playbooks/wazuh_install.yml # (Este puede tardar bastante)
-        ansible-playbook playbooks/suricata_install.yml
-        ansible-playbook playbooks/grafana_install.yml
+        ansible-playbook playbooks/zabbix_install.yml -i inventory.ini
+        ansible-playbook playbooks/wazuh_install.yml -i inventory.ini # (Este puede tardar bastante)
+        ansible-playbook playbooks/suricata_install.yml -i inventory.ini
+        ansible-playbook playbooks/grafana_install.yml -i inventory.ini
 
         # Instalar agentes Zabbix y Wazuh en nodos monitorizados
-        
+        ansible-playbook wazuh-agent-install.yml -i inventory.ini
+        ansible-playbook zabbix-agent-install.yml -i inventory.ini
         ```
 
 ## ⚙️ Configuración Post-Instalación
