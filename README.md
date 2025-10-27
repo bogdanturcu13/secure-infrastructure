@@ -6,7 +6,7 @@ Este proyecto despliega un entorno de laboratorio simulado para practicar tareas
 
 Crear un "panel de control único" (Single Pane of Glass) en Grafana que muestre tanto métricas de rendimiento y disponibilidad de sistemas (procedentes de Zabbix) como alertas de seguridad relevantes (procedentes de Wazuh, que a su vez integra alertas de Suricata). Esto permite correlacionar eventos de rendimiento con posibles incidentes de seguridad en una sola vista.
 
-![Panel final de Grafana](https://raw.githubusercontent.com/bogdanturcu13/cyberdefenders-writeups/main/Labs/DanaBot%20Lab/img/dns.png)
+![Panel final de Grafana](https://raw.githubusercontent.com/bogdanturcu13/secure-infrastructure/blob/main/img/grafana1.png)
 
 ## 🏗️ Arquitectura
 Para realizar el laboratorio he instalado 4 máquinas virtuales Ubuntu-Server, he configurado IP, DNS, el Firewall UFW para permitir conexiones entrantes y salientes por todos los puertos necesarios. En el apartado de red: he creado dos interfaces de red, una para el tráfico entre máquinas virtuales y otra para la salida a Internet. La primera se trata de una interfaz Solo-Host y la segunda de una Red Nat. La configuración IP de las interfaces Solo-Host es la siguiente:
