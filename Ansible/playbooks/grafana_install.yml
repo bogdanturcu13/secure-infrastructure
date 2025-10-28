@@ -4,7 +4,7 @@
   become: true
 
   tasks:
-    # --- 1. Añadir Repositorio de Grafana ---
+    # --- 1. Añadir repositorio de Grafana ---
     - name: 1.1 Instalar dependencias para añadir repositorios
       ansible.builtin.apt:
         name:
@@ -32,14 +32,14 @@
         name: grafana
         state: present
 
-    # --- 3. Instalar Plugins ---
+    # --- 3. Instalar plugins ---
     - name: 3.1 Instalar el plugin de Zabbix para Grafana
       ansible.builtin.grafana_plugin:
         name: alexanderzobnin-zabbix-app
         state: present
       notify: Reiniciar grafana-server
 
-    # --- 4. Iniciar Servicio ---
+    # --- 4. Iniciar servicio ---
     - name: 4.1 Asegurar que Grafana esté iniciado y habilitado
       ansible.builtin.systemd:
         name: grafana-server
