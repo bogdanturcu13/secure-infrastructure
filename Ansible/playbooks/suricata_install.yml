@@ -4,13 +4,13 @@
   become: true
 
   vars:
-    # Esta es la interfaz de tu red interna (Host-Only)
+    # Interfaz de la red Host-Only
     suricata_interface: "enp0s3"
     # Esta es la red que Suricata debe vigilar
     suricata_home_net: "192.168.56.0/24"
 
   tasks:
-    # --- 1. Añadir Repositorio PPA de Suricata ---
+    # --- 1. Añadir repositorio PPA de Suricata ---
     - name: 1.1 Instalar dependencias para añadir repositorios
       ansible.builtin.apt:
         name: software-properties-common
@@ -26,7 +26,7 @@
       retries: 3
       delay: 5
 
-    # --- 2. Instalar Suricata y Herramientas ---
+    # --- 2. Instalar Suricata y herramientas ---
     - name: 2.1 Instalar Suricata y suricata-update
       ansible.builtin.apt:
         name:
